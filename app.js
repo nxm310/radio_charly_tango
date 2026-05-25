@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Application State
   let map = null;
   let mapMarkers = [];
+  let flightsLayerGroup = null; // Groupe de calques pour les avions ADS-B en direct
   let currentStation = STATIONS[0];
   let isPlaying = false;
   let activeBandFilter = 'all';
@@ -96,7 +97,14 @@ document.addEventListener('DOMContentLoaded', () => {
       maxZoom: 19
     }).addTo(map);
 
+    // Initialiser le groupe pour les avions ADS-B
+    flightsLayerGroup = L.layerGroup().addTo(map);
+
     updateMapMarkers();
+    updateLiveFlights();
+
+    // Mettre à jour le trafic ADS-B toutes les 30 secondes
+    setInterval(updateLiveFlights, 30000);
   }
 
   function updateMapMarkers() {
@@ -154,6 +162,84 @@ document.addEventListener('DOMContentLoaded', () => {
       map.closePopup();
     }
   };
+
+  // Liste fixe des aéroports pour le calcul de proximité des avions ADS-B
+  const AIRPORTS_DB = [
+    { icao: "LFPG", name: "Paris-Charles de Gaulle", lat: 49.0097, lng: 2.5479, suggestStation: "swl-global-relay", stationName: "Ondes Courtes Global Relay" },
+    { icao: "EGLL", name: "London Heathrow Airport", lat: 51.4700, lng: -0.4543, suggestStation: "swl-global-relay", stationName: "Ondes Courtes Global Relay" },
+    { icao: "KJFK", name: "New York JFK International", lat: 40.6413, lng: -73.7781, suggestStation: "noaa-salisbury", stationName: "NOAA Salisbury Weather" },
+    { icao: "RJTT", name: "Tokyo Haneda Airport", lat: 35.5494, lng: 139.7798, suggestStation: "ham-repeater-brazil", stationName: "Relais VHF Radio-Amateur" }
+  ];
+
+  function updateLiveFlights() {
+    if (!flightsLayerGroup) return;
+
+    fetch('./live_flights.json')
+      .then(response => {
+        if (!response.ok) throw new Error("Fichier de vols indisponible");
+        return response.json();
+      })
+      .then(flights => {
+        flightsLayerGroup.clearLayers();
+        
+        // Mettre à jour le statut du logger
+        addLogLine("RADAR", "aviation", `Scan ADS-B complété. ${flights.length} aéronefs suivis en direct au-dessus de l'Europe.`);
+
+        flights.forEach(flight => {
+          // Trouver l'aéroport le plus proche de cet avion
+          let nearestAirport = AIRPORTS_DB[0];
+          let minDistance = Infinity;
+
+          AIRPORTS_DB.forEach(ap => {
+            const dist = calculateDistance(flight.latitude, flight.longitude, ap.lat, ap.lng);
+            if (dist < minDistance) {
+              minDistance = dist;
+              nearestAirport = ap;
+            }
+          });
+
+          // Créer l'icône de l'avion avec sa rotation (cap réel)
+          const flightIcon = L.divIcon({
+            className: 'flight-marker-container',
+            html: `
+              <div class="flight-icon-container" style="transform: rotate(${flight.heading || 0}deg);" title="Vol ${flight.callsign}">
+                <i class="fa-solid fa-plane flight-icon"></i>
+              </div>
+            `,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+
+          const marker = L.marker([flight.latitude, flight.longitude], { icon: flightIcon });
+
+          const popupContent = `
+            <div class="map-popup-card">
+              <h4 style="color:var(--color-aviation);"><i class="fa-solid fa-plane"></i> Vol ${flight.callsign}</h4>
+              <p>Origine: <strong>${flight.origin_country}</strong></p>
+              <div class="popup-details" style="flex-direction:column; gap:4px; border:none; padding-bottom:6px;">
+                <span>Altitude: ${(flight.altitude || 0).toFixed(0)} m</span>
+                <span>Vitesse: ${(flight.velocity * 3.6 || 0).toFixed(0)} km/h</span>
+                <span>Cap: ${(flight.heading || 0).toFixed(0)}°</span>
+              </div>
+              <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; margin-top:4px;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">
+                  Aéroport proche: <strong>${nearestAirport.icao} (${nearestAirport.name})</strong>
+                </span>
+                <button class="btn-popup-listen" style="background:var(--color-aviation); margin-top:6px;" onclick="window.tuneToStation('${nearestAirport.suggestStation}')">
+                  <i class="fa-solid fa-tower-broadcast"></i> Accorder ${nearestAirport.stationName}
+                </button>
+              </div>
+            </div>
+          `;
+
+          marker.bindPopup(popupContent);
+          flightsLayerGroup.addLayer(marker);
+        });
+      })
+      .catch(err => {
+        console.warn("Impossible de synchroniser les vols en temps réel :", err);
+      });
+  }
 
   // --------------------------------------------------------------------------
   // 2. MOTEUR AUDIO WEB AUDIO API & FLUX AUDIO REEL

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "noaa-salisbury",
+    "name": "NOAA Salisbury (KEC92)",
+    "type": "kiwisdr",
+    "frequency": 162.475,
+    "band": "VHF",
+    "category": "marine",
+    "latitude": 38.3607,
+    "longitude": -75.5994,
+    "stream_url": "https://wxradio.dyndns.org:8000/Salisbury.mp3",
+    "listeners": 185,
+    "status": "online"
+  },
+  {
+    "id": "noaa-worcester",
+    "name": "NOAA Worcester (WXL93)",
+    "type": "kiwisdr",
+    "frequency": 162.55,
+    "band": "VHF",
+    "category": "marine",
+    "latitude": 42.2626,
+    "longitude": -71.8023,
+    "stream_url": "https://wxradio.dyndns.org:8000/KXI94.mp3",
+    "listeners": 120,
+    "status": "online"
+  },
+  {
+    "id": "noaa-baltimore",
+    "name": "NOAA Emergency Baltimore",
+    "type": "kiwisdr",
+    "frequency": 162.4,
+    "band": "VHF",
+    "category": "safety",
+    "latitude": 39.2904,
+    "longitude": -76.6122,
+    "stream_url": "https://wxradio.dyndns.org:8000/KXI41.mp3",
+    "listeners": 240,
+    "status": "online"
+  },
+  {
+    "id": "ham-repeater-brazil",
+    "name": "Relais VHF CRAM-PY2KJZ",
+    "type": "amateur",
+    "frequency": 146.61,
+    "band": "VHF",
+    "category": "space-ham",
+    "latitude": -22.9064,
+    "longitude": -47.0616,
+    "stream_url": "https://live.arer.org.br:8000/amador",
+    "listeners": 78,
+    "status": "online"
+  },
+  {
+    "id": "swl-global-relay",
+    "name": "Ondes Courtes Global Relay",
+    "type": "kiwisdr",
+    "frequency": 7.2,
+    "band": "HF",
+    "category": "space-ham",
+    "latitude": 51.5074,
+    "longitude": -0.1278,
+    "stream_url": "https://relay.urc.org.uk/live",
+    "listeners": 312,
+    "status": "online"
+  }
+]

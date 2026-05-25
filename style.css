@@ -1314,3 +1314,35 @@ body, html {
     width: unset;
   }
 }
+
+/* ==========================================================================
+   MARQUEURS ET RADAR FLIGHTS ADS-B (PRO EVOLUTION)
+   ========================================================================== */
+.flight-icon-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 24px;
+  transition: transform 0.2s linear;
+}
+
+.flight-icon {
+  font-size: 1.15rem;
+  color: var(--color-aviation);
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.9);
+  transform: rotate(-45deg); /* Compenser l'angle par défaut de l'icône fa-plane */
+}
+
+.flight-icon-container:hover .flight-icon {
+  color: #fff;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 1);
+  transform: rotate(-45deg) scale(1.2);
+}
+
+.legend-item .dot.flights-radar {
+  background-color: var(--color-aviation);
+  box-shadow: 0 0 8px var(--color-aviation);
+  animation: pulse-dot 1.5s infinite;
+}
+
