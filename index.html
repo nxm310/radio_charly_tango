@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scanner Radio Live - Écoute Tactique des Bandes Mondiales</title>
+  <meta name="description" content="Écoutez les transmissions radio en direct des services de sécurité publique, de l'aviation et de la marine à travers le monde entier.">
+  
+  <!-- Polices Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome pour les icônes -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Leaflet CSS (Carte) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Styles principaux -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Overlay de démarrage / Ambiance sonore -->
+  <div id="startup-overlay" class="overlay">
+    <div class="overlay-card">
+      <div class="radar-container">
+        <div class="radar-sweep"></div>
+        <i class="fa-solid fa-tower-broadcast radar-icon"></i>
+      </div>
+      <h2>SCANNER RADIO LIVE</h2>
+      <p>Bienvenue dans le centre opérationnel d'écoute des fréquences mondiales.</p>
+      <p class="sub-text">Activez l'audio pour écouter le bruit de fond spatial, les squelchs analogiques et les transmissions en direct.</p>
+      <button id="btn-start" class="btn btn-primary btn-glow">
+        <i class="fa-solid fa-radio"></i> Initialiser la Liaison Audio
+      </button>
+    </div>
+  </div>
+
+  <!-- Notification Push Interne (Simulée) -->
+  <div id="push-notification" class="push-notification hidden">
+    <div class="push-header">
+      <span class="badge badge-alert"><i class="fa-solid fa-triangle-exclamation"></i> ALERTE TRAFIC</span>
+      <button id="close-push"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="push-body">
+      <h4 id="push-title">Alerte activité</h4>
+      <p id="push-message">Pic d'auditeurs important sur une fréquence locale.</p>
+      <div class="push-footer">
+        <span id="push-listeners"><i class="fa-solid fa-users"></i> +500 auditeurs</span>
+        <button id="btn-push-listen" class="btn btn-xs btn-alert-glow">Écouter Direct</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    
+    <!-- PANNEAU LATÉRAL (CONTROLE & DECOUVERTE) -->
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="logo">
+          <div class="logo-indicator"></div>
+          <h1>SCANNER <span>RADIO</span></h1>
+        </div>
+        <div class="live-counter">
+          <span class="pulsating-dot"></span>
+          <span id="global-listeners">1,402 en ligne</span>
+        </div>
+      </header>
+
+      <!-- Recherche & Géolocalisation -->
+      <section class="search-section">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="station-search" placeholder="Rechercher ville, pays ou canal...">
+        </div>
+        <button id="btn-geolocation" class="btn btn-secondary btn-icon-only" title="Trouver les récepteurs proches de moi">
+          <i class="fa-solid fa-location-crosshairs"></i>
+        </button>
+      </section>
+
+      <!-- Filtres par Bandes de Fréquences (Longueurs d'onde) -->
+      <section class="filters-section">
+        <h3>BANDES DE FRÉQUENCES</h3>
+        <div class="filter-wavelengths">
+          <button class="btn-wl active" data-band="all">
+            <span class="wl-title">Toutes</span>
+            <span class="wl-sub">Spectre total</span>
+          </button>
+          <button class="btn-wl" data-band="aviation">
+            <span class="wl-title">VHF Air</span>
+            <span class="wl-sub">118-137 MHz</span>
+          </button>
+          <button class="btn-wl" data-band="safety">
+            <span class="wl-title">Urgences</span>
+            <span class="wl-sub">VHF/UHF Secours</span>
+          </button>
+          <button class="btn-wl" data-band="marine">
+            <span class="wl-title">VHF Mer</span>
+            <span class="wl-sub">156-162 MHz</span>
+          </button>
+          <button class="btn-wl" data-band="space-ham">
+            <span class="wl-title">HF / HAM</span>
+            <span class="wl-sub">Ondes courtes</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Section Découverte des Canaux -->
+      <section class="discovery-section scrollable">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="popular">Flux Populaires</button>
+          <button class="tab-btn" data-tab="nearby">À Proximité</button>
+        </div>
+        
+        <div class="tab-content" id="list-popular">
+          <div class="stations-list" id="popular-stations-container">
+            <!-- Rempli dynamiquement en JS -->
+          </div>
+        </div>
+
+        <div class="tab-content hidden" id="list-nearby">
+          <div class="nearby-info" id="nearby-info-msg">
+            <i class="fa-solid fa-location-dot"></i>
+            <p>Activez la géolocalisation pour trouver les récepteurs à proximité de chez vous.</p>
+            <button id="btn-activate-geo" class="btn btn-secondary btn-sm">Géolocaliser</button>
+          </div>
+          <div class="stations-list hidden" id="nearby-stations-container">
+            <!-- Rempli dynamiquement en JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Alertes d'activité récentes -->
+      <section class="alerts-section">
+        <h3>ALERTES D'ACTIVITÉ EN COURS</h3>
+        <div class="alerts-list" id="alerts-container">
+          <!-- Rempli en JS -->
+        </div>
+      </section>
+    </aside>
+
+    <!-- ZONE PRINCIPALE (CARTE + PLAYER LCD FLOATING) -->
+    <main class="main-content">
+      
+      <!-- Carte Interactive Leaflet -->
+      <div id="map"></div>
+
+      <!-- Informations sur la zone d'écoute active (Floating) -->
+      <div id="map-legend" class="map-legend">
+        <h4>STATUT DU SPECTRE</h4>
+        <div class="legend-item"><span class="dot safety"></span> Urgences / Sécurité</div>
+        <div class="legend-item"><span class="dot aviation"></span> Aéronautique</div>
+        <div class="legend-item"><span class="dot marine"></span> Maritime</div>
+        <div class="legend-item"><span class="dot space-ham"></span> HF / Satellites / HAM</div>
+      </div>
+
+      <!-- PLAYER TACTIQUE LCD (GLASSMORPHISM FLOATING) -->
+      <div class="floating-player-card">
+        
+        <!-- ÉCRAN VIRTUEL LCD ANALOGIQUE -->
+        <div class="lcd-screen">
+          <div class="lcd-glow"></div>
+          
+          <div class="lcd-header">
+            <span class="lcd-status blink" id="lcd-status">SCANNING</span>
+            <span class="lcd-mode" id="lcd-mode">NFM - AUTO</span>
+            <span class="lcd-signal-bars" id="lcd-signal-text">SIG: S9+10dB</span>
+          </div>
+
+          <div class="lcd-main">
+            <!-- Numéro de fréquence géante -->
+            <div class="lcd-frequency" id="lcd-frequency">145.800</div>
+            <div class="lcd-unit">MHz</div>
+          </div>
+
+          <div class="lcd-footer">
+            <div class="lcd-channel" id="lcd-channel">ISS Space Downlink</div>
+            <div class="lcd-wavelength">Bande: <span id="lcd-band">VHF Space (2.06m)</span></div>
+          </div>
+
+          <!-- S-METER : Bargraphe analogique de puissance signal -->
+          <div class="s-meter">
+            <span class="s-label">SIG</span>
+            <div class="s-bars" id="s-meter-bars">
+              <!-- Rempli en JS pour faire osciller les barres -->
+              <div class="s-bar active"></div>
+              <div class="s-bar active"></div>
+              <div class="s-bar active"></div>
+              <div class="s-bar active"></div>
+              <div class="s-bar"></div>
+              <div class="s-bar"></div>
+              <div class="s-bar"></div>
+              <div class="s-bar"></div>
+              <div class="s-bar"></div>
+              <div class="s-bar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTROLES TACTILES DU PLAYER -->
+        <div class="player-controls">
+          <div class="control-row">
+            <button id="btn-prev" class="btn-ctrl" title="Précédent"><i class="fa-solid fa-backward-step"></i></button>
+            <button id="btn-play" class="btn-ctrl btn-main-play" title="Écouter/Pause"><i class="fa-solid fa-play"></i></button>
+            <button id="btn-next" class="btn-ctrl" title="Suivant"><i class="fa-solid fa-forward-step"></i></button>
+          </div>
+
+          <div class="control-separator"></div>
+
+          <!-- Contrôle de volume & Squelch -->
+          <div class="control-dials">
+            <div class="dial-container">
+              <i class="fa-solid fa-volume-high"></i>
+              <input type="range" id="volume-slider" min="0" max="100" value="80" class="tactical-slider">
+              <span id="volume-val" class="dial-val">80%</span>
+            </div>
+            
+            <div class="dial-container">
+              <span class="dial-label">SQUELCH</span>
+              <input type="range" id="squelch-slider" min="0" max="100" value="35" class="tactical-slider alert-slider">
+              <span id="squelch-val" class="dial-val">35%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- VISUALISEUR AUDIO DE SPECTRE (CANVAS) -->
+        <div class="visualizer-container">
+          <canvas id="audio-visualizer"></canvas>
+          
+          <!-- Journal des transmissions directes (Journal tactique de bord) -->
+          <div class="radio-logger">
+            <div class="logger-header">
+              <span><i class="fa-solid fa-terminal"></i> TRANSMISSIONS EN DIRECT (SIMULATION)</span>
+              <span class="logger-status">CONNECTED</span>
+            </div>
+            <div class="logger-body" id="logger-body">
+              <div class="log-line system">[SYSTEM] Recherche de porteuse sur le spectre VHF/UHF...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </main>
+  </div>
+
+  <!-- Scripts complémentaires (Leaflet, Stations, App) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="stations.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
