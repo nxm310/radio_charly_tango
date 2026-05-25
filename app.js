@@ -1,17 +1,14 @@
 /**
  * ==========================================================================
- * SCANNER RADIO LIVE - MOTEUR DE FLUX REELS ET LOGIQUE TACTIQUE
+ * SCANNER RADIO LIVE - MOTEUR 100% FLUX DIRECTS RÉELS (SANS SIMULATIONS)
  * ==========================================================================
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   
   // Elements UI
-  const startupOverlay = document.getElementById('startup-overlay');
-  const btnStart = document.getElementById('btn-start');
   const popularContainer = document.getElementById('popular-stations-container');
   const nearbyContainer = document.getElementById('nearby-stations-container');
-  const alertsContainer = document.getElementById('alerts-container');
   const stationSearch = document.getElementById('station-search');
   const btnGeoloc = document.getElementById('btn-geolocation');
   const btnActivateGeo = document.getElementById('btn-activate-geo');
@@ -34,30 +31,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnNext = document.getElementById('btn-next');
   const volumeSlider = document.getElementById('volume-slider');
   const volumeVal = document.getElementById('volume-val');
-  const squelchSlider = document.getElementById('squelch-slider');
-  const squelchVal = document.getElementById('squelch-val');
   
   // Logger
   const loggerBody = document.getElementById('logger-body');
   
-  // Push Notifications
-  const pushNotification = document.getElementById('push-notification');
-  const pushTitle = document.getElementById('push-title');
-  const pushMessage = document.getElementById('push-message');
-  const pushListeners = document.getElementById('push-listeners');
-  const btnPushListen = document.getElementById('btn-push-listen');
-  const closePush = document.getElementById('close-push');
-  
   // Application State
   let map = null;
   let mapMarkers = [];
-  let flightsLayerGroup = null; // Groupe de calques pour les avions ADS-B en direct
+  let flightsLayerGroup = null; // Groupe de calques pour les vols ADS-B en direct
   let currentStation = STATIONS[0];
   let isPlaying = false;
   let activeBandFilter = 'all';
   let activeTab = 'popular';
   let userCoords = null;
-  let simulatedAlertInterval = null;
   let sMeterInterval = null;
   
   // Web Audio & Streaming Variables
@@ -65,9 +51,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let streamAudio = null; // Élément audio pour le flux direct
   let streamSource = null;
   let streamGain = null;
-  let noiseNode = null;
-  let noiseGain = null;
-  let audioFilter = null;
   let analyser = null;
   let dataArray = null;
   let visualizerCanvas = document.getElementById('audio-visualizer');
@@ -76,9 +59,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Configuration
   let config = {
     volume: 0.8,
-    squelch: 0.35, // 0 to 1
-    totalGlobalListeners: 948
+    totalGlobalListeners: 814
   };
+
+  // Fermer et détruire immédiatement l'overlay de démarrage inutile (accès direct à la carte)
+  const startupOverlay = document.getElementById('startup-overlay');
+  if (startupOverlay) {
+    startupOverlay.remove();
+  }
+
+  // Masquer les blocs d'alertes simulées
+  const alertsSection = document.querySelector('.alerts-section');
+  if (alertsSection) {
+    alertsSection.style.display = 'none';
+  }
+  const pushNotification = document.getElementById('push-notification');
+  if (pushNotification) {
+    pushNotification.remove();
+  }
 
   // --------------------------------------------------------------------------
   // 1. CARTE INTERACTIVE LEAFLET (Thème Sombre)
@@ -144,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>Bande: ${station.band}</span>
           </div>
           <button class="btn-popup-listen" onclick="window.tuneToStation('${station.id}')">
-            <i class="fa-solid fa-tower-broadcast"></i> Se Brancher en Direct
+            <i class="fa-solid fa-play"></i> Lancer l'écoute en direct
           </button>
         </div>
       `;
@@ -182,11 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(flights => {
         flightsLayerGroup.clearLayers();
         
-        // Mettre à jour le statut du logger
-        addLogLine("RADAR", "aviation", `Scan ADS-B complété. ${flights.length} aéronefs suivis en direct au-dessus de l'Europe.`);
+        addLogLine("RADAR", "aviation", `Scan ADS-B complété. ${flights.length} vols identifiés en direct.`);
 
         flights.forEach(flight => {
-          // Trouver l'aéroport le plus proche de cet avion
           let nearestAirport = AIRPORTS_DB[0];
           let minDistance = Infinity;
 
@@ -198,7 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
 
-          // Créer l'icône de l'avion avec sa rotation (cap réel)
           const flightIcon = L.divIcon({
             className: 'flight-marker-container',
             html: `
@@ -223,10 +218,10 @@ document.addEventListener('DOMContentLoaded', () => {
               </div>
               <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:6px; margin-top:4px;">
                 <span style="font-size:0.75rem; color:var(--text-muted);">
-                  Aéroport proche: <strong>${nearestAirport.icao} (${nearestAirport.name})</strong>
+                  Aéroport proche: <strong>${nearestAirport.icao}</strong>
                 </span>
                 <button class="btn-popup-listen" style="background:var(--color-aviation); margin-top:6px;" onclick="window.tuneToStation('${nearestAirport.suggestStation}')">
-                  <i class="fa-solid fa-tower-broadcast"></i> Accorder ${nearestAirport.stationName}
+                  <i class="fa-solid fa-tower-broadcast"></i> Accorder le flux proche
                 </button>
               </div>
             </div>
@@ -242,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --------------------------------------------------------------------------
-  // 2. MOTEUR AUDIO WEB AUDIO API & FLUX AUDIO REEL
+  // 2. MOTEUR AUDIO DIRECT (Pas de filtres de distorsion, pas de bruits simulés)
   // --------------------------------------------------------------------------
   function initAudioEngine() {
     if (audioCtx) return;
@@ -250,63 +245,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     audioCtx = new AudioContextClass();
     
-    // 1. Element Audio HTML5 pour lire les flux Icecast/MP3 en direct
+    // Element Audio HTML5 pour le flux direct (100% réel, sans modifications de tonalité)
     streamAudio = new Audio();
-    streamAudio.crossOrigin = "anonymous"; // Permet de lire les fréquences du spectre malgré CORS
+    streamAudio.crossOrigin = "anonymous";
     streamAudio.preload = "auto";
     
-    // Node Source basé sur notre élément audio
     streamSource = audioCtx.createMediaElementSource(streamAudio);
     
-    // Contrôle de Gain du flux direct
     streamGain = audioCtx.createGain();
     streamGain.gain.value = config.volume;
 
-    // 2. Node Analyser pour le visualiseur de spectre
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 128;
     const bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
 
-    // 3. Filtre Passe-Bande Radio (Effet talkie-walkie très réaliste)
-    audioFilter = audioCtx.createBiquadFilter();
-    audioFilter.type = "bandpass";
-    audioFilter.frequency.value = 1100; // Centré sur les fréquences vocales
-    audioFilter.Q.value = 1.0; // Résonance étroite pour l'effet "cristallin" analogique
-
-    // 4. Générateur de Bruit Blanc (Static)
-    const bufferSize = 2 * audioCtx.sampleRate;
-    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
-    }
-    
-    noiseNode = audioCtx.createBufferSource();
-    noiseNode.buffer = noiseBuffer;
-    noiseNode.loop = true;
-    
-    noiseGain = audioCtx.createGain();
-    noiseGain.gain.value = 0.0;
-
-    // 5. Chainage audio
-    // Le flux direct passe par le filtre radio, puis le gain du flux, puis va à l'analyser et à la sortie
-    streamSource.connect(audioFilter);
-    audioFilter.connect(streamGain);
+    // Connexion directe transparente pour préserver la qualité originale du flux
+    streamSource.connect(streamGain);
     streamGain.connect(analyser);
-
-    // Le bruit blanc (static) va aussi à l'analyser pour s'afficher à l'écran
-    noiseNode.connect(noiseGain);
-    noiseGain.connect(analyser);
-
     analyser.connect(audioCtx.destination);
     
-    noiseNode.start(0);
-
-    // Lancer la boucle de rendu visuel du Canvas
     drawVisualizer();
     
-    // Gérer les évènements de chargement du flux
+    // Événements de chargement réseau
     streamAudio.addEventListener('waiting', () => {
       lcdStatus.textContent = "BUFFERING";
       lcdStatus.style.backgroundColor = "rgba(255,159,67,0.15)";
@@ -314,82 +275,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     streamAudio.addEventListener('playing', () => {
-      playClickSound();
       lcdStatus.textContent = "LOCKED";
       lcdStatus.style.backgroundColor = "rgba(0,255,102,0.15)";
       lcdStatus.style.color = "#0f6";
-      addLogLine("RECEIVER", currentStation.category, `Signal verrouillé. Réception audio en cours.`);
+      addLogLine("RECEIVER", currentStation.category, `Connexion établie. Lecture du flux en direct.`);
     });
 
     streamAudio.addEventListener('error', (e) => {
-      console.error("Erreur de chargement du flux direct :", e);
-      lcdStatus.textContent = "ERR: OFFLINE";
+      lcdStatus.textContent = "OFFLINE";
       lcdStatus.style.backgroundColor = "rgba(255,56,56,0.15)";
       lcdStatus.style.color = "var(--color-safety)";
-      addLogLine("SYSTEM", "safety", `Erreur de connexion au flux. Station temporairement hors-ligne.`);
+      addLogLine("SYSTEM", "safety", `Erreur d'écoute : le flux direct est injoignable.`);
     });
   }
 
-  // Jouer des tonalités de manipulation radio (Bips réalistes)
-  function playClickSound() {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.05);
-    
-    gain.gain.setValueAtTime(config.volume * 0.25, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-    
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.06);
-  }
-
-  function playRogerBeep() {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-    
-    gain.gain.setValueAtTime(config.volume * 0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-    
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.16);
-  }
-
-  // Ajustement dynamique du bruit de souffle analogique en fonction du Squelch
   function updateAudioParameters() {
-    if (!audioCtx) return;
-
-    // Volume du flux direct
-    if (streamGain) {
+    if (streamGain && audioCtx) {
       streamGain.gain.setValueAtTime(config.volume, audioCtx.currentTime);
     }
-
-    // Le niveau de bruit statique dépend du squelch.
-    // Si squelch bas (< 0.40), on mixe du bruit blanc analogique réaliste sur le flux réel.
-    // Si squelch haut (> 0.40), on coupe complètement le bruit de fond pour un confort parfait.
-    if (noiseGain) {
-      let targetNoise = 0;
-      if (isPlaying && config.squelch < 0.40) {
-        targetNoise = config.volume * (0.40 - config.squelch) * 0.25;
-      }
-      noiseGain.gain.setValueAtTime(targetNoise, audioCtx.currentTime);
-    }
   }
 
-  // Oscillation du S-Meter basée sur l'activité audio réelle !
+  // S-Meter réel branché sur les fréquences du flux audio
   function updateSMeterFromAudio() {
     if (!isPlaying || !analyser) return;
 
@@ -400,9 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const average = total / dataArray.length;
     
-    // Convertir l'intensité audio réelle en barre S-Meter (1 à 10)
-    // Plus le flux en direct contient de voix/bruit, plus les barres s'allument
-    const signalLevel = Math.max(1, Math.min(10, Math.floor(average / 12) + 2));
+    const signalLevel = Math.max(1, Math.min(10, Math.floor(average / 15) + 2));
     
     const bars = sMeterBars.querySelectorAll('.s-bar');
     bars.forEach((bar, index) => {
@@ -413,12 +317,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    const dbValue = signalLevel * 6 + Math.floor(Math.random() * 4);
+    const dbValue = signalLevel * 6 + Math.floor(Math.random() * 3);
     lcdSignalText.textContent = `SIG: S${signalLevel} +${dbValue}dB`;
   }
 
   // --------------------------------------------------------------------------
-  // 3. LOGIQUE DE VISUALISATION CANVAS (Canvas visualizer)
+  // 3. CANVAS SPECTRE DE FREQUENCE
   // --------------------------------------------------------------------------
   function drawVisualizer() {
     if (!isPlaying || !analyser) {
@@ -496,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const popular = [...filtered].sort((a, b) => b.listeners - a.listeners);
 
     if (popular.length === 0) {
-      popularContainer.innerHTML = `<div class="station-loc" style="padding: 10px; text-align: center;">Aucun flux actif trouvé</div>`;
+      popularContainer.innerHTML = `<div class="station-loc" style="padding: 10px; text-align: center;">Aucun flux en direct</div>`;
     } else {
       popular.forEach(station => {
         const item = createStationItemHTML(station);
@@ -520,7 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="station-freq">${station.frequency.toFixed(3)} MHz</span>
         </div>
         <div class="station-name">${station.name}</div>
-        <div class="station-loc"><i class="fa-solid fa-rss animate-pulse"></i> FLUX EN DIRECT - ${station.location}</div>
+        <div class="station-loc"><i class="fa-solid fa-wifi"></i> Direct - ${station.location}</div>
       </div>
       <div class="station-meta">
         <div class="station-listeners"><i class="fa-solid fa-users"></i> ${station.listeners}</div>
@@ -609,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --------------------------------------------------------------------------
-  // 6. CONTROLES DE LECTURE DU SPECTRE REEL
+  // 6. CONTROLES DE LECTURE
   // --------------------------------------------------------------------------
   function selectStation(station) {
     currentStation = station;
@@ -623,16 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
       map.setView(station.coords, 6);
     }
 
-    playClickSound();
-
     document.querySelectorAll('.station-item').forEach(el => {
       el.classList.remove('active-playing');
     });
     
     populateStationsLists();
 
-    // Log système
-    addLogLine("SYSTEM", "safety", `Recherche sur ${station.frequency.toFixed(3)} MHz...`);
+    // Log
+    addLogLine("SYSTEM", "safety", `Sélection : ${station.name} (${station.frequency.toFixed(3)} MHz).`);
   }
 
   function playStation() {
@@ -654,12 +556,11 @@ document.addEventListener('DOMContentLoaded', () => {
     streamAudio.src = currentStation.streamUrl;
     streamAudio.load();
     streamAudio.play().catch(err => {
-      console.warn("Échec de la lecture automatique du flux direct (interaction requise) :", err);
+      console.warn("Échec de lecture automatique du flux direct :", err);
     });
 
     updateAudioParameters();
     
-    // Lancer la boucle de mise à jour du S-Meter en fonction de l'audio réel
     if (sMeterInterval) clearInterval(sMeterInterval);
     sMeterInterval = setInterval(updateSMeterFromAudio, 100);
 
@@ -677,93 +578,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (streamAudio) {
       streamAudio.pause();
-      streamAudio.src = ""; // Libérer le stream réseau immédiatement
+      streamAudio.src = ""; // Libérer le réseau immédiatement
     }
 
     if (sMeterInterval) clearInterval(sMeterInterval);
     updateAudioParameters();
     
-    // Éteindre les barres S-Meter
     const bars = sMeterBars.querySelectorAll('.s-bar');
     bars.forEach(bar => bar.classList.remove('active'));
 
-    playRogerBeep();
     populateStationsLists();
-    addLogLine("SYSTEM", "safety", `Récepteur mis en veille.`);
+    addLogLine("SYSTEM", "safety", `Écoute arrêtée.`);
   }
 
   // --------------------------------------------------------------------------
-  // 7. ALERTES MAJEURES
-  // --------------------------------------------------------------------------
-  function populateAlertsList() {
-    alertsContainer.innerHTML = '';
-    ALERTS.forEach(alert => {
-      const item = document.createElement('div');
-      item.className = `alert-item intensity-${alert.intensity}`;
-      
-      item.innerHTML = `
-        <div class="alert-head">
-          <span><i class="fa-solid fa-triangle-exclamation animate-pulse"></i> ${alert.title}</span>
-          <span class="alert-time">${alert.time}</span>
-        </div>
-        <div class="alert-desc">${alert.message}</div>
-        <div class="alert-foot">
-          <span>Trafic: <span class="alert-delta">${alert.listenersDelta}</span></span>
-          <span style="color:var(--color-aviation);">Brancher en direct <i class="fa-solid fa-angle-right"></i></span>
-        </div>
-      `;
-
-      item.addEventListener('click', () => {
-        const station = STATIONS.find(s => s.id === alert.stationId);
-        if (station) {
-          selectStation(station);
-          playStation();
-        }
-      });
-
-      alertsContainer.appendChild(item);
-    });
-  }
-
-  function triggerSimulatedAlert() {
-    if (ALERTS.length === 0) return;
-    const randomAlert = ALERTS[Math.floor(Math.random() * ALERTS.length)];
-    
-    pushTitle.textContent = randomAlert.title;
-    pushMessage.textContent = randomAlert.message;
-    pushListeners.innerHTML = `<i class="fa-solid fa-users animate-pulse"></i> ${randomAlert.listenersDelta} auditeurs en direct`;
-    
-    pushNotification.classList.remove('hidden');
-
-    if (audioCtx && isPlaying) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(500, audioCtx.currentTime);
-      osc.frequency.setValueAtTime(1000, audioCtx.currentTime + 0.12);
-      
-      gain.gain.setValueAtTime(config.volume * 0.08, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.36);
-    }
-
-    btnPushListen.onclick = () => {
-      const station = STATIONS.find(s => s.id === randomAlert.stationId);
-      if (station) {
-        selectStation(station);
-        playStation();
-        pushNotification.classList.add('hidden');
-      }
-    };
-  }
-
-  // --------------------------------------------------------------------------
-  // 8. EVENEMENTS
+  // 7. EVENEMENTS
   // --------------------------------------------------------------------------
   function switchTab(tabName) {
     activeTab = tabName;
@@ -834,36 +663,24 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAudioParameters();
   });
 
-  squelchSlider.addEventListener('input', (e) => {
-    const value = e.target.value;
-    squelchVal.textContent = `${value}%`;
-    config.squelch = value / 100;
-    updateAudioParameters();
-  });
-
-  closePush.addEventListener('click', () => {
-    pushNotification.classList.add('hidden');
-  });
-
   btnGeoloc.addEventListener('click', handleGeolocation);
   btnActivateGeo.addEventListener('click', handleGeolocation);
 
-  btnStart.addEventListener('click', () => {
-    startupOverlay.classList.add('hidden');
-    initAudioEngine();
-    playStation();
-    
-    simulatedAlertInterval = setInterval(triggerSimulatedAlert, 40000);
-    setTimeout(triggerSimulatedAlert, 12000);
-  });
+  // Masquer les dials Squelch inutiles
+  const squelchSliderEl = document.getElementById('squelch-slider');
+  if (squelchSliderEl) {
+    const squelchContainer = squelchSliderEl.closest('.dial-container');
+    if (squelchContainer) {
+      squelchContainer.style.display = 'none';
+    }
+  }
 
   // --------------------------------------------------------------------------
-  // 9. INITIALISATION
+  // 8. INITIALISATION DIRECTE
   // --------------------------------------------------------------------------
   initMap();
   selectStation(STATIONS[0]);
   populateStationsLists();
-  populateAlertsList();
   resizeCanvas();
 
   // Variation de l'audience
